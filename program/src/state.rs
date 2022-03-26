@@ -4,6 +4,22 @@ use solana_program::{
 };
 
 #[derive(BorshSerialize, BorshDeserialize, Debug, Clone, Default)]
+pub struct AccountTemp {
+    pub authority: Pubkey,
+    pub offer_amount: u64,
+    pub trade_amount: u64,
+}
+
+impl AccountTemp {
+    pub fn size() -> usize {
+        let encoded = AccountTemp::default()
+            .try_to_vec().unwrap();
+
+        encoded.len()
+    }
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Debug, Clone, Default)]
 pub struct AccountTrade {
     pub offer_token_account: Pubkey,
     pub authority: Pubkey,

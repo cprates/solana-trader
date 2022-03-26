@@ -1,6 +1,7 @@
 use crate::{instructions::Action, error::TradeError};
 use crate::state;
 use borsh::{BorshDeserialize, BorshSerialize};
+use solana_program::sysvar::Sysvar;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     entrypoint,
@@ -9,6 +10,7 @@ use solana_program::{
     pubkey::{Pubkey, PUBKEY_BYTES},
     program_error::ProgramError,
     program_memory::sol_memcmp,
+    rent::Rent,
     system_instruction,
 };
 
@@ -31,22 +33,26 @@ impl Processor {
                     Err(TradeError::WrongAuthority)?;
                 }
 
-                // TODO: check for rent exempt
                 let trade_ai = next_account_info(accounts_iter)?;
                 let mut trade_account = state::AccountTrade::try_from_slice(&trade_ai.data.borrow())?;
                 if trade_account.initialized {
-                    Err(ProgramError::AccountAlreadyInitialized)?;
+                    return Err(ProgramError::AccountAlreadyInitialized)?;
+                }
+
+                let rent = Rent::get()?;
+                if !rent.is_exempt(trade_ai.lamports(), trade_ai.data_len()) {
+                    return Err(ProgramError::AccountNotRentExempt)?;
                 }
 
                 let mint_ai = next_account_info(accounts_iter)?;
-                // TODO: uncomment. Test with wrong account
+                // TODO: is this check useful?
                 if *mint_ai.owner != spl_token::id() {
                     return Err(ProgramError::IncorrectProgramId)?;
                 }
                 
                 let offer_token_ai = next_account_info(accounts_iter)?;
-                // TODO: uncomment. Test with wrong account
-                if *mint_ai.owner != spl_token::id() {
+                // TODO: is this check useful?
+                if *offer_token_ai.owner != spl_token::id() {
                     return Err(ProgramError::IncorrectProgramId)?;
                 }
 
@@ -66,12 +72,15 @@ impl Processor {
 
                 // Create temp account
 
+                let temp_size = state::AccountTemp::size();
+                let min_balance = rent.minimum_balance(temp_size);
+                
                 // TODO: what is the difference between using this one or create_account_with_seed ?
                 let owner_change_ix = system_instruction::create_account(
                     authority.key,
                     temp_account_ai.key,
-                    20000000000000 as u64, // TODO: rent exempt - Rent::get()?.minimum_balance(size as usize),
-                    state::AccountTrade::size() as u64, // TODO: wrong size
+                    min_balance,
+                    temp_size as u64,
                     trade_program_id.key,
                 );
 
