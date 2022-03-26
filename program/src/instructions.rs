@@ -1,17 +1,15 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 
-// 0. `[signer]` Account of the owner of the trade
-// 1. `[writable]` trade account
-// 2. `[]` mint account of the offer
-// 3. `[]` the account to store the trade amount
-// 4. `[writable]` temp account
-// 5. `[]` trade program id
-// 6. `[]` system program id
 #[derive(BorshSerialize, BorshDeserialize, Debug, Clone)]
 pub enum Action {
+    // 0. `[signer]` Account of the owner of the trade
+    // 1. `[writable]` trade account
+    // 2. `[]` token account - the account holding the offer amount
+    // 3. `[writable]` pda account
+    // 4. `[]` token program account
     CreateTrade{ 
         bump_seed: u8,
-        offer: u64,
+        offer: u64, // must match amount in account 2
         trade: u64,
     },
 }

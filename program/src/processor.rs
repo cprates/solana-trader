@@ -12,13 +12,15 @@ use solana_program::{
     program_memory::sol_memcmp,
     rent::Rent,
     system_instruction,
+    program_pack::{IsInitialized, Pack, Sealed},
 };
+use spl_token::state::Account;
 
 pub struct Processor {}
 
 impl Processor {
     pub fn process(
-        _program_id: &Pubkey,
+        program_id: &Pubkey,
         accounts: &[AccountInfo],
         instruction_data: &[u8],
     ) -> entrypoint::ProgramResult {
@@ -28,6 +30,8 @@ impl Processor {
 
         match instruction {
             Action::CreateTrade { offer, trade, bump_seed } => {
+                msg!("Creating trade...");
+                
                 let authority = next_account_info(accounts_iter)?;
                 if !authority.is_signer {
                     Err(TradeError::WrongAuthority)?;
@@ -43,65 +47,58 @@ impl Processor {
                 if !rent.is_exempt(trade_ai.lamports(), trade_ai.data_len()) {
                     return Err(ProgramError::AccountNotRentExempt)?;
                 }
-
-                let mint_ai = next_account_info(accounts_iter)?;
-                // TODO: is this check useful?
-                if *mint_ai.owner != spl_token::id() {
-                    return Err(ProgramError::IncorrectProgramId)?;
-                }
                 
                 let offer_token_ai = next_account_info(accounts_iter)?;
                 // TODO: is this check useful?
+                // TODO: should also be rent exempt?
                 if *offer_token_ai.owner != spl_token::id() {
                     return Err(ProgramError::IncorrectProgramId)?;
                 }
-
-                let temp_account_ai = next_account_info(accounts_iter)?;
-
-                let trade_program_id = next_account_info(accounts_iter)?;
-                // TODO: is this check really needed?
-                if !trade_program_id.executable {
-                    return Err(TradeError::NotAProgram)?;
-                }
-
-                let system_program_id = next_account_info(accounts_iter)?;
-                // TODO: is this check really needed?
-                if !system_program_id.executable {
-                    return Err(TradeError::NotAProgram)?;
-                }
-
-                // Create temp account
-
-                let temp_size = state::AccountTemp::size();
-                let min_balance = rent.minimum_balance(temp_size);
                 
-                // TODO: what is the difference between using this one or create_account_with_seed ?
-                let owner_change_ix = system_instruction::create_account(
-                    authority.key,
-                    temp_account_ai.key,
-                    min_balance,
-                    temp_size as u64,
-                    trade_program_id.key,
-                );
-
-                invoke_signed(
-                    &owner_change_ix,
-                    &[
-                        authority.clone(),
-                        temp_account_ai.clone(),
-                        system_program_id.clone(),
-                    ],
-                    &[&[&authority.key.as_ref(), &trade_ai.key.as_ref(), &[bump_seed]]],
-                )?;
+                let offer_token = Account::unpack_from_slice(&offer_token_ai.data.borrow())?;
+                if offer_token.amount == 0 {
+                    return Err(ProgramError::InsufficientFunds)?;
+                }
 
                 trade_account.offer_token_account = *offer_token_ai.key;
                 trade_account.authority = *authority.key;
                 trade_account.offer_amount = offer;
                 trade_account.trade_amount = trade;
                 trade_account.initialized = true;
-                trade_account.mint_account = *mint_ai.key;
-                trade_account.program_id = *trade_program_id.key;
+                trade_account.program_id = *program_id;
                 trade_account.serialize(&mut *trade_ai.data.borrow_mut())?;
+
+                // Create temp account
+
+                msg!("Trade account initialised...");
+
+                // transfer authority of the token account to trader program - this will avoid
+                // part A having to somehow sign the transfer when making the deal
+
+                let pda_pubkey = next_account_info(accounts_iter)?;
+                let token_prog_ai = next_account_info(accounts_iter)?;
+                
+                msg!("Transfering token account authority to {}", pda_pubkey.key.to_string());
+
+                let owner_change_ix = spl_token::instruction::set_authority(
+                    &spl_token::id(),
+                    offer_token_ai.key,
+                    Some(&pda_pubkey.key),
+                    spl_token::instruction::AuthorityType::AccountOwner,
+                    authority.key,
+                    &[&authority.key],
+                )?;
+        
+                invoke(
+                    &owner_change_ix,
+                    &[
+                        offer_token_ai.clone(),
+                        authority.clone(),
+                        token_prog_ai.clone(),
+                    ],
+                )?;
+
+                msg!("Transfered authority..");
             },
         }
 

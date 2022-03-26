@@ -12,6 +12,7 @@ pub struct AccountTemp {
 
 impl AccountTemp {
     pub fn size() -> usize {
+        // TODO: could have a const to save compute unites when executed on-chain
         let encoded = AccountTemp::default()
             .try_to_vec().unwrap();
 
@@ -26,12 +27,12 @@ pub struct AccountTrade {
     pub offer_amount: u64,
     pub trade_amount: u64,
     pub initialized: bool,
-    pub mint_account: Pubkey,
     pub program_id: Pubkey,
 }
 
 impl AccountTrade {
     pub fn size() -> usize {
+        // TODO: could have a const to save compute unites when executed on-chain
         let encoded = AccountTrade::default()
             .try_to_vec().unwrap();
 
