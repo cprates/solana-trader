@@ -1,0 +1,17 @@
+[package]
+name = "trader-client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+spl-associated-token-account = "1.0.3"
+solana-sdk = "1.9.9"
+solana-client = "1.9.9"
+solana-program = "1.4.4"
+yaml-rust = "0.4"
+thiserror = "1"
+home = "0.5.3"
+borsh = "0.9.1"
+
+[dependencies.trader]
+path = "../program"
