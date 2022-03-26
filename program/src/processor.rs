@@ -27,7 +27,7 @@ impl Processor {
         let accounts_iter = &mut accounts.iter();
 
         match instruction {
-            Action::CreateTrade { offer, trade } => {
+            Action::CreateTrade { offer, trade, bump_seed } => {
                 let authority = next_account_info(accounts_iter)?;
                 if !authority.is_signer {
                     Err(TradeError::WrongAuthority)?;
@@ -91,7 +91,7 @@ impl Processor {
                         temp_account_ai.clone(),
                         system_program_id.clone(),
                     ],
-                    &[&[&authority.key.as_ref(), &trade_ai.key.as_ref(), &[255]]],
+                    &[&[&authority.key.as_ref(), &trade_ai.key.as_ref(), &[bump_seed]]],
                 )?;
 
                 trade_account.offer_token_account = *offer_token_ai.key;
