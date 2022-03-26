@@ -6,8 +6,18 @@ use thiserror::Error;
 pub enum TradeError {
     #[error("Authority missmatch")]
     WrongAuthority,
+    
     #[error("Not a program")]
     NotAProgram,
+
+    #[error("Unexpected offer amount")]
+    UnexpectedOfferAmount,
+
+    #[error("Unexpected trade amount")]
+    UnexpectedTradeAmount,
+
+    #[error("Trade not initialised")]
+    TradeNotInitialised,
 }
 
 impl From<TradeError> for ProgramError {

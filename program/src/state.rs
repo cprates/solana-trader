@@ -22,6 +22,7 @@ impl AccountTemp {
 
 #[derive(BorshSerialize, BorshDeserialize, Debug, Clone, Default)]
 pub struct AccountTrade {
+    pub bump_seed: u8,
     pub offer_token_account: Pubkey,
     pub authority: Pubkey,
     pub offer_amount: u64,

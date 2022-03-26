@@ -50,7 +50,6 @@ impl Processor {
                 
                 let offer_token_ai = next_account_info(accounts_iter)?;
                 // TODO: is this check useful?
-                // TODO: should also be rent exempt?
                 if *offer_token_ai.owner != spl_token::id() {
                     return Err(ProgramError::IncorrectProgramId)?;
                 }
@@ -60,6 +59,7 @@ impl Processor {
                     return Err(ProgramError::InsufficientFunds)?;
                 }
 
+                trade_account.bump_seed = bump_seed;
                 trade_account.offer_token_account = *offer_token_ai.key;
                 trade_account.authority = *authority.key;
                 trade_account.offer_amount = offer_token.amount;
@@ -100,6 +100,69 @@ impl Processor {
 
                 msg!("Transfered authority..");
             },
+
+            Action::MakeTrade{ expected_offer, expected_trade} => {
+                msg!("Making trade...");
+                
+                let authority_ai = next_account_info(accounts_iter)?;
+                if !authority_ai.is_signer {
+                    Err(TradeError::WrongAuthority)?;
+                }
+
+                let trade_account_ai = next_account_info(accounts_iter)?;
+                let mut trade_account = state::AccountTrade::try_from_slice(&trade_account_ai.data.borrow())?;
+                if !trade_account.initialized {
+                    return Err(TradeError::TradeNotInitialised)?;
+                }
+
+                let pda_ai = next_account_info(accounts_iter)?;
+                let trade_dst_ai = next_account_info(accounts_iter)?;
+                let trade_src_ai = next_account_info(accounts_iter)?;
+                let offer_dst_ai = next_account_info(accounts_iter)?;
+                let token_program_ai = next_account_info(accounts_iter)?;
+                let trader_program_ai = next_account_info(accounts_iter)?;
+
+                // TODO
+                let original_pda_ai = next_account_info(accounts_iter)?;
+
+                if expected_offer != trade_account.offer_amount {
+                    msg!("Expected offer of {}, but got {}", expected_offer, trade_account.offer_amount);
+                    return Err(TradeError::UnexpectedOfferAmount)?;
+                }
+
+                if expected_trade != trade_account.trade_amount {
+                    msg!("Expected trade of {}, but got {}", expected_trade, trade_account.trade_amount);
+                    return Err(TradeError::UnexpectedTradeAmount)?;
+                }
+
+                // transfer offer from pda to destination 
+
+                let transfer_pda_ix = spl_token::instruction::transfer(
+                    token_program_ai.key,
+                    original_pda_ai.key,
+                    offer_dst_ai.key,
+                    &pda_ai.key,
+                    &[&pda_ai.key],
+                    expected_offer,
+                )?;
+                
+                invoke_signed(
+                    &transfer_pda_ix,
+                    &[
+                        original_pda_ai.clone(),
+                        offer_dst_ai.clone(),
+                        pda_ai.clone(),
+                        token_program_ai.clone(),
+                    ],
+                    &[&[trade_account_ai.key.as_ref(), &[trade_account.bump_seed]]],
+                )?;
+                msg!("Offer amount transfered...");
+
+                // TODO:
+                //   - transfer trade amount
+                //   - transfer pda's and trade lamports back to owner
+                //   - close pda and trade account
+            }
         }
 
         Ok(())

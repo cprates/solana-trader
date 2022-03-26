@@ -61,7 +61,7 @@ pub fn create_trade(
     // this should allow one to have as many trades as they want
     // generate it off-chain to save computation credits
     let (pda_pubkey, bump_seed) = Pubkey::find_program_address(
-        &[owner.pubkey().as_ref(), trade_account_keypair.pubkey().as_ref()],
+        &[trade_account_keypair.pubkey().as_ref()],
             &trader_program_id,
     );
 
@@ -84,6 +84,54 @@ pub fn create_trade(
     );
     let message = Message::new(&[create_trader_account_ix, init_trade_ix], Some(&owner.pubkey()));
     let transaction = Transaction::new(&[&owner, &trade_account_keypair], message, conn.get_latest_blockhash().unwrap());
+
+    conn.send_and_confirm_transaction(&transaction).unwrap();
+
+    Ok(())
+}
+
+pub fn make_trade(
+    offer: u64,
+    trade: u64,
+    owner: Keypair,
+    trade_id: Pubkey,
+    trader_program_id: Pubkey,
+    trade_dst: Pubkey,
+    trade_src: Pubkey, 
+    offer_dst: Pubkey,
+    original_pda: Pubkey,
+    conn: &RpcClient,
+) -> Result<()> {
+    println!("Making trade...");
+
+    let (pda_pubkey, _) = Pubkey::find_program_address(
+        &[trade_id.as_ref()],
+            &trader_program_id,
+    );
+
+    let action = Action::MakeTrade { 
+        expected_offer: offer,
+        expected_trade: trade,
+    };
+    let buf = &action.try_to_vec().unwrap()[..];
+
+    let make_trade_ix = Instruction::new_with_bytes(
+        trader_program_id,
+        buf,
+        vec![
+            AccountMeta::new_readonly(owner.pubkey(), true),
+            AccountMeta::new(trade_id, false),
+            AccountMeta::new(pda_pubkey, false),
+            AccountMeta::new(trade_dst, false),
+            AccountMeta::new(trade_src, false),
+            AccountMeta::new(offer_dst, false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+            AccountMeta::new_readonly(trader_program_id, false),
+            AccountMeta::new(original_pda, false),
+        ],
+    );
+    let message = Message::new(&[make_trade_ix], Some(&owner.pubkey()));
+    let transaction = Transaction::new(&[&owner], message, conn.get_latest_blockhash().unwrap());
 
     conn.send_and_confirm_transaction(&transaction).unwrap();
 
@@ -128,13 +176,30 @@ fn main() {
     //println!("Account balance: {}", balance); // TODO: this prints a different value from 'solana balance' ?
 
     // TODO
-    let token_pubkey = Pubkey::from_str("5U2LSmhuBRGqobz3V3FUTWkAu3BL2RzgixdeBqEKKJrF").unwrap();
+    let token_pubkey = Pubkey::from_str("J9w7iwsKUdhnPDutBjdYEphbKRpaLUmtpfAGggadupcE").unwrap();
+
+    let trade_id = Pubkey::from_str("H96F9EAuds2Wab2qpzZXrUG16qy1rwQr9ASncoQgoQ1u").unwrap();
+    let offer_dst = Pubkey::from_str("5AfQJS5FJkk1SQf5s7c5XFBDeHNbQAzjEXMWwDTbixwa").unwrap();
+    let trade_dst = Pubkey::from_str("DscwD8rrC3Ztr4hQqSdtbAhCAubrjADVE4sRYg3U31hi").unwrap();
+    let trade_src = Pubkey::from_str("BsP4W1iW1JHA3nAYMTNAWC26knq7ipWgAxTmQSnqZpaf").unwrap();
 
     //println!("fees = {:?}", rpc.get_fees()?);
     //println!("signature fee = {}", rpc.get_fees()?.fee_calculator.lamports_per_signature);
 
     match args[2].as_str() {
         "1" => create_trade(2, wallet, token_pubkey, program_pubkey, &conn).unwrap(),
+        "2" => make_trade(
+            10000000000, // TODO: stop using the account.balance or handle decimals...
+            2,
+            wallet,
+            trade_id,
+            program_pubkey,
+            trade_dst,
+            trade_src,
+            offer_dst,
+            token_pubkey,
+            &conn,
+        ).unwrap(),
         op => {
             eprintln!("Unknown operation '{}'", op);
             std::process::exit(-1);
