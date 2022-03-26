@@ -1,0 +1,24 @@
+use borsh::{BorshDeserialize, BorshSerialize};
+use solana_program::{
+    pubkey::Pubkey,
+};
+
+#[derive(BorshSerialize, BorshDeserialize, Debug, Clone, Default)]
+pub struct AccountTrade {
+    pub offer_token_account: Pubkey,
+    pub authority: Pubkey,
+    pub offer_amount: u64,
+    pub trade_amount: u64,
+    pub initialized: bool,
+    pub mint_account: Pubkey,
+    pub program_id: Pubkey,
+}
+
+impl AccountTrade {
+    pub fn size() -> usize {
+        let encoded = AccountTrade::default()
+            .try_to_vec().unwrap();
+
+        encoded.len()
+    }
+}

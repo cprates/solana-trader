@@ -1,0 +1,16 @@
+[package]
+name = "trader"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+exclude_entrypoint = []
+
+[dependencies]
+borsh = "0.9"
+solana-program = "=1.9.9"
+spl-token = {version = "3.2.0", features = ["no-entrypoint"]}
+thiserror = "1.0"
+
+[lib]
+crate-type = ["cdylib", "lib"]
