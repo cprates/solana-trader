@@ -32,7 +32,6 @@ pub fn create_trade(
     trade: u64, 
     owner: Keypair,
     token_account: Pubkey,
-    mint_account_id: Pubkey,
     trader_program_id: Pubkey, 
     conn: &RpcClient,
 ) -> Result<()> {
@@ -62,7 +61,7 @@ pub fn create_trade(
 
     // this should allow one to have as many trades as they want
     // generate it off-chain to save computation credits
-    let (tmp_account_pubkey, bump_seed) = Pubkey::find_program_address(
+    let (pda_pubkey, bump_seed) = Pubkey::find_program_address(
         &[owner.pubkey().as_ref(), trade_account_keypair.pubkey().as_ref()],
             &trader_program_id,
     );
@@ -80,11 +79,9 @@ pub fn create_trade(
         vec![
             AccountMeta::new_readonly(owner.pubkey(), true),
             AccountMeta::new(trade_account_keypair.pubkey(), false),
-            AccountMeta::new_readonly(mint_account_id, false),
-            AccountMeta::new_readonly(token_account, false),
-            AccountMeta::new(tmp_account_pubkey, false),
-            AccountMeta::new_readonly(trader_program_id, false),
-            AccountMeta::new_readonly(system_program::id(), false),
+            AccountMeta::new(token_account, false),
+            AccountMeta::new(pda_pubkey, false),          
+            AccountMeta::new_readonly(spl_token::id(), false),
         ],
     );
     let message = Message::new(&[create_trader_account_ix, init_trade_ix], Some(&owner.pubkey()));
@@ -133,14 +130,13 @@ fn main() {
     //println!("Account balance: {}", balance); // TODO: this prints a different value from 'solana balance' ?
 
     // TODO
-    let mint_pubkey = Pubkey::from_str("93EwGRnjRWLiBmitG7qiuFYGBBPSVGQ1p9KvQYK7JJcQ").unwrap();
-    let token_pubkey = Pubkey::from_str("AuSB8xyjF95hnaw1g5yHRMAdf57bJrjnCq8AsZ2XUCeJ").unwrap();
+    let token_pubkey = Pubkey::from_str("5U2LSmhuBRGqobz3V3FUTWkAu3BL2RzgixdeBqEKKJrF").unwrap();
 
     //println!("fees = {:?}", rpc.get_fees()?);
     //println!("signature fee = {}", rpc.get_fees()?.fee_calculator.lamports_per_signature);
 
     match args[2].as_str() {
-        "1" => create_trade(1, 2, wallet, token_pubkey, mint_pubkey, program_pubkey, &conn).unwrap(),
+        "1" => create_trade(1, 2, wallet, token_pubkey, program_pubkey, &conn).unwrap(),
         op => {
             eprintln!("Unknown operation '{}'", op);
             std::process::exit(-1);
