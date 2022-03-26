@@ -9,7 +9,6 @@ pub enum Action {
     // 4. `[]` token program account
     CreateTrade{ 
         bump_seed: u8,
-        offer: u64, // must match amount in account 2
         trade: u64,
     },
 }

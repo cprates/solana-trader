@@ -29,7 +29,7 @@ impl Processor {
         let accounts_iter = &mut accounts.iter();
 
         match instruction {
-            Action::CreateTrade { offer, trade, bump_seed } => {
+            Action::CreateTrade { trade, bump_seed } => {
                 msg!("Creating trade...");
                 
                 let authority = next_account_info(accounts_iter)?;
@@ -62,7 +62,7 @@ impl Processor {
 
                 trade_account.offer_token_account = *offer_token_ai.key;
                 trade_account.authority = *authority.key;
-                trade_account.offer_amount = offer;
+                trade_account.offer_amount = offer_token.amount;
                 trade_account.trade_amount = trade;
                 trade_account.initialized = true;
                 trade_account.program_id = *program_id;
@@ -77,7 +77,7 @@ impl Processor {
 
                 let pda_pubkey = next_account_info(accounts_iter)?;
                 let token_prog_ai = next_account_info(accounts_iter)?;
-                
+
                 msg!("Transfering token account authority to {}", pda_pubkey.key.to_string());
 
                 let owner_change_ix = spl_token::instruction::set_authority(

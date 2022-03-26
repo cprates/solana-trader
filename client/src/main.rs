@@ -28,7 +28,6 @@ use trader::{
 };
 
 pub fn create_trade(
-    offer: u64,
     trade: u64, 
     owner: Keypair,
     token_account: Pubkey,
@@ -68,7 +67,6 @@ pub fn create_trade(
 
     let action = Action::CreateTrade {
         bump_seed: bump_seed,
-        offer: offer, 
         trade: trade,
     };
     let buf = &action.try_to_vec().unwrap()[..];
@@ -136,7 +134,7 @@ fn main() {
     //println!("signature fee = {}", rpc.get_fees()?.fee_calculator.lamports_per_signature);
 
     match args[2].as_str() {
-        "1" => create_trade(1, 2, wallet, token_pubkey, program_pubkey, &conn).unwrap(),
+        "1" => create_trade(2, wallet, token_pubkey, program_pubkey, &conn).unwrap(),
         op => {
             eprintln!("Unknown operation '{}'", op);
             std::process::exit(-1);
