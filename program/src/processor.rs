@@ -116,14 +116,12 @@ impl Processor {
                 }
 
                 let pda_ai = next_account_info(accounts_iter)?;
+                let original_pda_addr_ai = next_account_info(accounts_iter)?;
                 let trade_dst_ai = next_account_info(accounts_iter)?;
                 let trade_src_ai = next_account_info(accounts_iter)?;
                 let offer_dst_ai = next_account_info(accounts_iter)?;
                 let token_program_ai = next_account_info(accounts_iter)?;
                 let trader_program_ai = next_account_info(accounts_iter)?;
-
-                // TODO
-                let original_pda_ai = next_account_info(accounts_iter)?;
 
                 if expected_offer != trade_account.offer_amount {
                     msg!("Expected offer of {}, but got {}", expected_offer, trade_account.offer_amount);
@@ -137,9 +135,9 @@ impl Processor {
 
                 // transfer offer from pda to destination 
 
-                let transfer_pda_ix = spl_token::instruction::transfer(
+                let transfer_offer_ix = spl_token::instruction::transfer(
                     token_program_ai.key,
-                    original_pda_ai.key,
+                    original_pda_addr_ai.key,
                     offer_dst_ai.key,
                     &pda_ai.key,
                     &[&pda_ai.key],
@@ -147,19 +145,48 @@ impl Processor {
                 )?;
                 
                 invoke_signed(
-                    &transfer_pda_ix,
+                    &transfer_offer_ix,
                     &[
-                        original_pda_ai.clone(),
+                        original_pda_addr_ai.clone(),
                         offer_dst_ai.clone(),
                         pda_ai.clone(),
                         token_program_ai.clone(),
                     ],
                     &[&[trade_account_ai.key.as_ref(), &[trade_account.bump_seed]]],
                 )?;
-                msg!("Offer amount transfered...");
+
+                msg!(
+                    "Offer amount transfered from {} with PDA {} to {}...",
+                    original_pda_addr_ai.key.to_string(), pda_ai.key.to_string(), offer_dst_ai.key.to_string(),
+                );
+
+                // transfer trade amount
+
+                let transfer_trade_ix = spl_token::instruction::transfer(
+                    token_program_ai.key,
+                    trade_src_ai.key,
+                    trade_dst_ai.key,
+                    &authority_ai.key,
+                    &[&authority_ai.key],
+                    expected_trade,
+                )?;
+                
+                invoke(
+                    &transfer_trade_ix,
+                    &[
+                        trade_src_ai.clone(),
+                        trade_dst_ai.clone(),
+                        authority_ai.clone(),
+                        token_program_ai.clone(),
+                    ],
+                )?;
+
+                msg!(
+                    "Trade amount transfered from {} to {}...",
+                    trade_src_ai.key.to_string(), trade_dst_ai.key.to_string(),
+                );
 
                 // TODO:
-                //   - transfer trade amount
                 //   - transfer pda's and trade lamports back to owner
                 //   - close pda and trade account
             }
