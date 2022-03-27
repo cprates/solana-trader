@@ -18,6 +18,12 @@ pub enum TradeError {
 
     #[error("Trade not initialised")]
     TradeNotInitialised,
+
+    #[error("Value overflow")]
+    ValueOverflow,
+
+    #[error("Wrong token account")]
+    WrongTokenAccount,
 }
 
 impl From<TradeError> for ProgramError {

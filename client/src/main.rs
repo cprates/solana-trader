@@ -245,6 +245,7 @@ pub fn make_trade(
     offer: u64,
     trade: u64,
     owner: Keypair,
+    wallet1: Pubkey,
     trade_id: Pubkey,
     trader_program_id: Pubkey,
     trade_dst: Pubkey,
@@ -272,13 +273,13 @@ pub fn make_trade(
         vec![
             AccountMeta::new_readonly(owner.pubkey(), true),
             AccountMeta::new(trade_id, false),
-            AccountMeta::new(pda_pubkey, false),
+            AccountMeta::new_readonly(pda_pubkey, false),
             AccountMeta::new(original_pda_addr, false),
             AccountMeta::new(trade_dst, false),
             AccountMeta::new(trade_src, false),
             AccountMeta::new(offer_dst, false),
             AccountMeta::new_readonly(spl_token::id(), false),
-            AccountMeta::new_readonly(trader_program_id, false),
+            AccountMeta::new(wallet1, false),
         ],
     );
     let message = Message::new(&[make_trade_ix], Some(&owner.pubkey()));
@@ -335,28 +336,32 @@ fn main() {
     //println!("Account balance: {}", balance); // TODO: this prints a different value from 'solana balance' ?
 
     // TODO
-    let token_pubkey = Pubkey::from_str("6c12WF8zFc6My1oPz7EzNYj5CSzaWP29wES66fhi7Hgr").unwrap();
+    let offer_src = Pubkey::from_str("dkMXtanTMp3p6yfoFGiQ9GTNvcxZB82Kdzd4GTerEoX").unwrap();
+    let offer_dst = Pubkey::from_str("9GEfzfGUQ3XBKerR9x3X4ffnyBz7yrY18JCMFCrRU2wD").unwrap();
+    let trade_src = Pubkey::from_str("C9DFHnsMutjGoy4BXqQdVWCh2UNUYBTy7FxixbRFLkxv").unwrap();
+    let trade_dst = Pubkey::from_str("52LDxj7cvRaixzx1uGxwSQVr17PFYmeUTvLicbA7m7fq").unwrap();
 
-    let trade_id = Pubkey::from_str("7eWD3WfMjrYNxnJAH4WBZrPcZcMsf5Cd619nbAVscyLT").unwrap();
-    let offer_dst = Pubkey::from_str("3t4zR1TVwvAh4wBCnmkoHokbqmLLxMrGv7mo95DYhwPq").unwrap();
-    let trade_src = Pubkey::from_str("3zGFKpHaZztezZh2Bs9tpVB4thgu6czoRWmT4mffmo2q").unwrap();
-    let trade_dst = Pubkey::from_str("EsUyS8fpQZAnwcqRzptGhSSoSMpxymKVBrYoJ42txuwg").unwrap();
+    // TODO: pass in the args
+    let wallet1 = Pubkey::from_str("C1G2n2mFb27S3didy9zRc5KCHvgXNVtBmH4DzFfQEaCb").unwrap();
+    // generated after step "1"
+    let trade_account_id = Pubkey::from_str("2rsUW5ofqhPJr3pk6BSsq2471wHTLivYVZvU4eBiCcFY").unwrap();
     
     //println!("fees = {:?}", rpc.get_fees()?);
     //println!("signature fee = {}", rpc.get_fees()?.fee_calculator.lamports_per_signature);
 
     match args[2].as_str() {
-        "1" => create_trade(2, wallet, token_pubkey, program_pubkey, &conn).unwrap(),
+        "1" => create_trade(2, wallet, offer_src, program_pubkey, &conn).unwrap(),
         "2" => make_trade(
             10000000000, // TODO: pass 10 and on-chain adjust with the account decimals
-            20000000000, // TODO: pass 10 and on-chain adjust with the account decimals
+            2, // TODO: pass 10 and on-chain adjust with the account decimals
             wallet,
-            trade_id,
+            wallet1,
+            trade_account_id,
             program_pubkey,
             trade_dst,
             trade_src,
             offer_dst,
-            token_pubkey,
+            offer_src,
             &conn,
         ).unwrap(),
         "3" => {

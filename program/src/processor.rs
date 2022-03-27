@@ -94,7 +94,7 @@ impl Processor {
                     &[
                         offer_token_ai.clone(),
                         authority.clone(),
-                        token_prog_ai.clone(),
+                        token_prog_ai.clone(), // TODO: probably not needed
                     ],
                 )?;
 
@@ -110,7 +110,7 @@ impl Processor {
                 }
 
                 let trade_account_ai = next_account_info(accounts_iter)?;
-                let mut trade_account = state::AccountTrade::try_from_slice(&trade_account_ai.data.borrow())?;
+                let trade_account = state::AccountTrade::try_from_slice(&trade_account_ai.data.borrow())?;
                 if !trade_account.initialized {
                     return Err(TradeError::TradeNotInitialised)?;
                 }
@@ -121,7 +121,15 @@ impl Processor {
                 let trade_src_ai = next_account_info(accounts_iter)?;
                 let offer_dst_ai = next_account_info(accounts_iter)?;
                 let token_program_ai = next_account_info(accounts_iter)?;
-                let trader_program_ai = next_account_info(accounts_iter)?;
+                let offer_owner_ai = next_account_info(accounts_iter)?;
+
+                if sol_memcmp(trade_account.offer_token_account.as_ref(), original_pda_addr_ai.key.as_ref(), PUBKEY_BYTES) != 0 {
+                    Err(TradeError::WrongTokenAccount)?
+                }
+
+                if sol_memcmp(program_id.as_ref(), trade_account.program_id.as_ref(), PUBKEY_BYTES) != 0 {
+                    Err(ProgramError::IncorrectProgramId)?
+                }
 
                 if expected_offer != trade_account.offer_amount {
                     msg!("Expected offer of {}, but got {}", expected_offer, trade_account.offer_amount);
@@ -136,7 +144,7 @@ impl Processor {
                 // transfer offer from pda to destination 
 
                 let transfer_offer_ix = spl_token::instruction::transfer(
-                    token_program_ai.key,
+                    &spl_token::id(),
                     original_pda_addr_ai.key,
                     offer_dst_ai.key,
                     &pda_ai.key,
@@ -163,7 +171,7 @@ impl Processor {
                 // transfer trade amount
 
                 let transfer_trade_ix = spl_token::instruction::transfer(
-                    token_program_ai.key,
+                    &spl_token::id(),
                     trade_src_ai.key,
                     trade_dst_ai.key,
                     &authority_ai.key,
@@ -186,9 +194,47 @@ impl Processor {
                     trade_src_ai.key.to_string(), trade_dst_ai.key.to_string(),
                 );
 
-                // TODO:
-                //   - transfer pda's and trade lamports back to owner
-                //   - close pda and trade account
+                let trade_account_balance = trade_account_ai.lamports();
+                **offer_owner_ai.try_borrow_mut_lamports()? = offer_owner_ai
+                    .lamports()
+                    .checked_add(trade_account_ai.lamports())
+                    .ok_or(TradeError::ValueOverflow)?;
+                // close account
+                **trade_account_ai.try_borrow_mut_lamports()? = 0;
+                let bump_seed = trade_account.bump_seed;
+                let offer_authority = trade_account.authority;
+                // clean data for security reasons
+                *trade_account_ai.try_borrow_mut_data()? = &mut [];
+
+                msg!("Trade account closed. Returned {} lamports to account {}", trade_account_balance, offer_owner_ai.key.to_string());
+
+                // return authotiry of the offer token account to the original owner
+
+                // makes sure it's returning authority to the right owner
+                if sol_memcmp(offer_authority.as_ref(), offer_owner_ai.key.as_ref(), PUBKEY_BYTES) != 0 {
+                    Err(TradeError::WrongAuthority)?
+                }
+
+                let owner_change_ix = spl_token::instruction::set_authority(
+                    &spl_token::id(),
+                    original_pda_addr_ai.key,
+                    Some(&offer_authority),
+                    spl_token::instruction::AuthorityType::AccountOwner,
+                    &pda_ai.key,
+                    &[&pda_ai.key],
+                )?;
+        
+                invoke_signed(
+                    &owner_change_ix,
+                    &[
+                        original_pda_addr_ai.clone(),
+                        pda_ai.clone(),
+                    ],
+                    &[&[trade_account_ai.key.as_ref(), &[bump_seed]]],
+                )?;
+
+                msg!("Returned authority of {} back to {}", 
+                    original_pda_addr_ai.key.to_string(), offer_authority.to_string());
             }
         }
 
