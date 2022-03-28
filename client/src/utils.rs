@@ -11,6 +11,7 @@ use spl_token::state::{
     Account,
     Mint,
 };
+use std::str::FromStr;
 use yaml_rust::YamlLoader;
 
 pub fn load_config() -> Result<yaml_rust::Yaml> {
@@ -102,4 +103,27 @@ pub fn create_account_ix(
     ).unwrap();
 
     Vec::from([create_ix, init_ix])
+}
+
+// Copied  from https://github.com/solana-labs/solana-program-library/blob/b7a3fc62431fcd00001df625aaa61a29ce7d1e29/token/cli/src/main.rs#L599
+// and adapted
+pub fn resolve_mint_info(
+    token_account: &Pubkey,
+    mint_address: Option<Pubkey>,
+    conn: &RpcClient,
+) -> Result<u8> {
+    let source_account = conn
+        .get_token_account(token_account).unwrap()
+        .ok_or_else(|| format!("Could not find token account {}", token_account)).unwrap();
+
+    let source_mint = Pubkey::from_str(&source_account.mint).unwrap();
+    if let Some(mint) = mint_address {
+        if source_mint != mint {
+            return Err(Error::InvalidConfig(format!(
+                "Source {:?} does not contain {:?} tokens",
+                token_account, mint
+            )));
+        }
+    }
+    Ok(source_account.token_amount.decimals)
 }

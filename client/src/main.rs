@@ -7,6 +7,7 @@ use trader_client::utils::{
     load_config,
     create_mint_ix,
     create_account_ix,
+    resolve_mint_info,
 };
 use solana_client::rpc_client::RpcClient;
 use spl_associated_token_account;
@@ -350,20 +351,31 @@ fn main() {
     //println!("signature fee = {}", rpc.get_fees()?.fee_calculator.lamports_per_signature);
 
     match args[2].as_str() {
-        "1" => create_trade(2, wallet, offer_src, program_pubkey, &conn).unwrap(),
-        "2" => make_trade(
-            10000000000, // TODO: pass 10 and on-chain adjust with the account decimals
-            2, // TODO: pass 10 and on-chain adjust with the account decimals
-            wallet,
-            wallet1,
-            trade_account_id,
-            program_pubkey,
-            trade_dst,
-            trade_src,
-            offer_dst,
-            offer_src,
-            &conn,
-        ).unwrap(),
+        "1" => {
+            let decimals = resolve_mint_info(&offer_src, None, &conn).unwrap();
+            let ammount = spl_token::ui_amount_to_amount(2.0, decimals);
+            create_trade(ammount, wallet, offer_src, program_pubkey, &conn).unwrap();
+        }
+        "2" => {
+            let offer_decimals = resolve_mint_info(&offer_src, None, &conn).unwrap();
+            let offer_ammount = spl_token::ui_amount_to_amount(10.0, offer_decimals);
+            let trade_decimals = resolve_mint_info(&trade_src, None, &conn).unwrap();
+            let trade_ammount = spl_token::ui_amount_to_amount(2.0, trade_decimals);
+
+            make_trade(
+                offer_ammount,
+                trade_ammount,
+                wallet,
+                wallet1,
+                trade_account_id,
+                program_pubkey,
+                trade_dst,
+                trade_src,
+                offer_dst,
+                offer_src,
+                &conn,
+            ).unwrap();
+        }
         "3" => {
             if args.len() != 5 {
                 eprintln!(
