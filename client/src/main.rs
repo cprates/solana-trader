@@ -8,10 +8,15 @@ use trader_client::utils::{
     create_mint_ix,
     create_account_ix,
     resolve_mint_info,
+    get_or_create_token_account,
 };
-use solana_client::rpc_client::RpcClient;
+use solana_client::{
+    rpc_client::RpcClient,
+    client_error::ClientErrorKind,
+};
 use spl_associated_token_account;
 use solana_sdk::{
+    account::Account,
     commitment_config::CommitmentConfig,
     message::Message,
     instruction::{
@@ -25,10 +30,6 @@ use solana_sdk::{
         Signer,
     },
     transaction::Transaction,
-};
-use spl_token::state::{
-    Account,
-    Mint,
 };
 use std::borrow::Borrow;
 //use std::fmt::Result;
@@ -47,10 +48,10 @@ use trader::{
  * 
  * A (offer)
  *   - Token Account 1: Mint A. Offer src account which will be transfered to the trader program, with balance of 1000
- *   - Token account 2: Mint B. Trade dst account
+ *   - Token account 2: Mint B. Trade dst account. If not provided an ATA will be used
  * 
  * B (trade)
- *   - Token Account 3: Mint A. Offer dst account
+ *   - Token Account 3: Mint A. Offer dst account. If not provided an ATA will be used
  *   - Token account 4: Mint B. Trade src account with a balance of 1000
  * 
 */
@@ -242,6 +243,9 @@ pub fn create_trade(
     Ok(())
 }
 
+/*
+ * owner will be funding ata accounts if any needs to be created.
+*/
 pub fn make_trade(
     offer: u64,
     trade: u64,
@@ -249,10 +253,10 @@ pub fn make_trade(
     wallet1: Pubkey,
     trade_id: Pubkey,
     trader_program_id: Pubkey,
-    trade_dst: Pubkey,
+    trade_dst: Option<Pubkey>,
     trade_src: Pubkey, 
-    offer_dst: Pubkey,
-    original_pda_addr: Pubkey,
+    offer_dst: Option<Pubkey>,
+    offer_src: Pubkey,
     conn: &RpcClient,
 ) -> Result<()> {
     println!("Making trade...");
@@ -275,10 +279,10 @@ pub fn make_trade(
             AccountMeta::new_readonly(owner.pubkey(), true),
             AccountMeta::new(trade_id, false),
             AccountMeta::new_readonly(pda_pubkey, false),
-            AccountMeta::new(original_pda_addr, false),
-            AccountMeta::new(trade_dst, false),
+            AccountMeta::new(offer_src, false),
+            AccountMeta::new(trade_dst.unwrap_or_else(|| get_or_create_token_account(&owner, owner.pubkey(), trade_src, conn).unwrap()), false),
             AccountMeta::new(trade_src, false),
-            AccountMeta::new(offer_dst, false),
+            AccountMeta::new(offer_dst.unwrap_or_else(|| get_or_create_token_account(&owner, wallet1, offer_src, conn).unwrap()), false),
             AccountMeta::new_readonly(spl_token::id(), false),
             AccountMeta::new(wallet1, false),
         ],
@@ -337,15 +341,15 @@ fn main() {
     //println!("Account balance: {}", balance); // TODO: this prints a different value from 'solana balance' ?
 
     // TODO
-    let offer_src = Pubkey::from_str("dkMXtanTMp3p6yfoFGiQ9GTNvcxZB82Kdzd4GTerEoX").unwrap();
-    let offer_dst = Pubkey::from_str("9GEfzfGUQ3XBKerR9x3X4ffnyBz7yrY18JCMFCrRU2wD").unwrap();
-    let trade_src = Pubkey::from_str("C9DFHnsMutjGoy4BXqQdVWCh2UNUYBTy7FxixbRFLkxv").unwrap();
-    let trade_dst = Pubkey::from_str("52LDxj7cvRaixzx1uGxwSQVr17PFYmeUTvLicbA7m7fq").unwrap();
+    let offer_src = Pubkey::from_str("8GKnb7qGi3iRq59du5VTTQFSwTEhtrKgVywnZ1LcrGZS").unwrap();
+    let offer_dst = Pubkey::from_str("3vcMr9AUhK9KcV12CtnTjV7SqJr2nne3nVci2hJ2AqYd").unwrap();
+    let trade_src = Pubkey::from_str("9j4dvQFYQE8kAzdM3Ukxfk7obus7vviNVuV7kPWk9bGP").unwrap();
+    let trade_dst = Pubkey::from_str("7p3tqYMydkUNzrqT5NFojCxTGfkMLCFr3nAisuSUYYNw").unwrap();
 
     // TODO: pass in the args
     let wallet1 = Pubkey::from_str("C1G2n2mFb27S3didy9zRc5KCHvgXNVtBmH4DzFfQEaCb").unwrap();
     // generated after step "1"
-    let trade_account_id = Pubkey::from_str("2rsUW5ofqhPJr3pk6BSsq2471wHTLivYVZvU4eBiCcFY").unwrap();
+    let trade_account_id = Pubkey::from_str("ErsEQXQqGgawbCecvt2jXdmZNn63SvLJ7yrk5QtK9JrV").unwrap();
     
     //println!("fees = {:?}", rpc.get_fees()?);
     //println!("signature fee = {}", rpc.get_fees()?.fee_calculator.lamports_per_signature);
@@ -369,9 +373,9 @@ fn main() {
                 wallet1,
                 trade_account_id,
                 program_pubkey,
-                trade_dst,
+                None, //Some(trade_dst),
                 trade_src,
-                offer_dst,
+                None, //Some(offer_dst),
                 offer_src,
                 &conn,
             ).unwrap();

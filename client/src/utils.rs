@@ -1,11 +1,17 @@
 use crate::{Error, Result};
 use solana_client::rpc_client::RpcClient;
 use solana_program::program_pack::Pack;
-use solana_sdk::signer::keypair::{read_keypair_file, Keypair};
+use solana_sdk::signer::keypair::{read_keypair_file};
 use solana_sdk::{
+    message::Message,
     instruction::Instruction,
     pubkey::Pubkey,
     system_instruction,
+    signer::{
+        keypair::Keypair,
+        Signer,
+    },
+    transaction::Transaction,
 };
 use spl_token::state::{
     Account,
@@ -126,4 +132,40 @@ pub fn resolve_mint_info(
         }
     }
     Ok(source_account.token_amount.decimals)
+}
+
+pub fn get_or_create_token_account(
+    payer: &Keypair,
+    wallet: Pubkey,
+    token_account: Pubkey,
+    conn: &RpcClient,
+) -> Result<Pubkey> {
+    let token_account = conn.get_token_account(&token_account).unwrap().unwrap();
+    let offer_src_addr = Pubkey::from_str(&token_account.mint).unwrap();
+
+    let offer_ata = spl_associated_token_account::get_associated_token_address(&wallet, &offer_src_addr);
+
+    // TODO: handle error properly - if AccountNotFound, create it, otherwise raise it
+    let _offer_ata_account = match conn.get_account(&offer_ata) {
+        Err(_) => {
+            println!("Creating ATA...");
+
+            let ix = spl_associated_token_account::create_associated_token_account(
+                &payer.pubkey(),
+                &wallet,
+                &offer_src_addr,
+            );
+
+            let message = Message::new(&[ix], Some(&payer.pubkey()));
+            let transaction = Transaction::new(&[payer], message, conn.get_latest_blockhash().unwrap());
+            conn.send_and_confirm_transaction(&transaction).unwrap();
+
+            println!("ATA created with address {}", offer_ata.to_string());
+
+            conn.get_account(&offer_ata).unwrap()
+        },
+        Ok(account ) => account
+    };
+
+    Ok(offer_ata)
 }
