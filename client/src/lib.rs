@@ -1,6 +1,7 @@
 use thiserror::Error;
 
 pub mod utils;
+pub mod client;
 
 #[derive(Error, Debug)]
 pub enum Error {
