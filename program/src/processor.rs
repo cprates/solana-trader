@@ -116,6 +116,10 @@ impl Processor {
                 }
 
                 let pda_ai = next_account_info(accounts_iter)?;
+                // to avoid the need of this account, I could create a temporary PDA that was deleted afterwards
+                // instead of using the original token account.
+                // Another detail about this implementation is that this account should not be an ATA because at some
+                // point its authority is moved to the program which changes its data
                 let original_pda_addr_ai = next_account_info(accounts_iter)?;
                 let trade_dst_ai = next_account_info(accounts_iter)?;
                 let trade_src_ai = next_account_info(accounts_iter)?;
@@ -195,6 +199,7 @@ impl Processor {
                 );
 
                 let trade_account_balance = trade_account_ai.lamports();
+                // TODO: Store this in the trade account and make sure they match, to prevent the taker from using a different account to return lamports
                 **offer_owner_ai.try_borrow_mut_lamports()? = offer_owner_ai
                     .lamports()
                     .checked_add(trade_account_ai.lamports())

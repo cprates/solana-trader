@@ -7,7 +7,6 @@ use crate::utils::{
     load_config,
     create_mint_ix,
     create_account_ix,
-    resolve_mint_info,
     get_or_create_token_account,
 };
 use solana_client::{

@@ -1,15 +1,26 @@
+use clap::{
+    Arg,
+    Command,
+};
 use trader_client::client;
 use trader_client::utils::{
     get_wallet,
     load_config,
     resolve_mint_info,
+    ProgramConfig,
 };
+
 use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     commitment_config::CommitmentConfig,
     pubkey::Pubkey,
 };
-
+use solana_clap_utils::{
+    input_validators::{
+        is_valid_pubkey,
+        is_amount,
+    },
+};
 use std::str::FromStr;
 
 /*
@@ -21,17 +32,148 @@ solana config set --keypair $(pwd)/wallet2.json
 solana airdrop 50000
  */
 fn main() {
-    let args = std::env::args().collect::<Vec<_>>();
-    if args.len() < 3 {
-        eprintln!(
-            "usage: {} <trader prog addr> <action>",
-            args[0]
-        );
-        std::process::exit(-1);
-    }
-    // program pubkey
-    let program_addr = &args[1];
-    let program_pubkey = Pubkey::from_str(program_addr).unwrap();
+    const PROGRAM_CONFIG_PATH: &str = "./program_wallet.json";
+    
+    let app_matches = Command::new("Trader")
+        .about("Create and manage trades")
+        .version("v0.0.0")
+        .subcommand_required(true)
+        .arg_required_else_help(true)
+        .subcommand(Command::new("config").about("Manage CLI configs")
+            .arg(
+                Arg::new("program")
+                    .value_name("PROGRAM")
+                    .takes_value(true)
+                    //.validator(is_valid_pubkey)
+                    .short('p')
+                    .help("Specify program address."),
+            )
+            .arg(
+                Arg::new("wallet")
+                    .value_name("WALLET")
+                    .takes_value(true)
+                    //.required(true)
+                    .short('w')
+                    .help("Specify wallet address."),
+            )
+            .arg_required_else_help(true)
+        )
+        .subcommand(Command::new("create").about("Create a new trade")
+            .arg(
+                Arg::new("offer_account")
+                    .value_name("OFFER_ACCOUNT")
+                    .takes_value(true)
+                    .required(true)
+                    .index(1)
+                    .help("Specify the token account address of the offer. \
+                        The offer amount is the account balance."),
+            )
+            .arg(
+                Arg::new("trade_token")
+                    .value_name("TRADE_TOKEN")
+                    .takes_value(true)
+                    .required(true)
+                    .index(2)
+                    .help("Specify the token address of the token wanted."),
+            )
+            .arg(
+                Arg::new("amount")
+                    .value_name("AMOUNT")
+                    .takes_value(true)
+                    .required(true)
+                    //.validator(is_amount)
+                    .index(3)
+                    .help("Specify the amount of the trade."),
+            )
+        )
+        .subcommand(Command::new("trade").about("Accept a trade")
+            .arg(
+                Arg::new("id")
+                    .value_name("TRADE_ID")
+                    .takes_value(true)
+                    .required(true)
+                    .index(1)
+                    .help("Specify the trade id."),
+            )
+            .arg(
+                Arg::new("offersrc")
+                    .value_name("OFFER_SRC")
+                    .takes_value(true)
+                    .required(true)
+                    .index(2)
+                    .help("Specify token account from where the offer amount will be taken from."),
+            )
+            .arg(
+                Arg::new("offer-amount")
+                    .value_name("OFFER_AMOUNT")
+                    .takes_value(true)
+                    .required(true)
+                    //.validator(is_amount)
+                    .index(3)
+                    .help("Specify the amount of the expected offer."),
+            )
+            .arg(
+                Arg::new("tradesrc")
+                    .value_name("TRADE_SRC")
+                    .takes_value(true)
+                    .required(true)
+                    .index(4)
+                    .help("Specify token account from where the trade amount will be taken from."),
+            )
+            .arg(
+                Arg::new("trade-amount")
+                    .value_name("TRADE_AMOUNT")
+                    .takes_value(true)
+                    .required(true)
+                    //.validator(is_amount)
+                    .index(5)
+                    .help("Specify the amount of the expected trade."),
+            )
+            .arg(
+                Arg::new("offer-owner")
+                    .value_name("OFFER_OWNER")
+                    .takes_value(true)
+                    .required(true)
+                    //.validator(is_amount)
+                    .index(6)
+                    .help("Specify the wallet public address of the owner of this trade."),
+            )
+            .arg(
+                Arg::new("offerdst")
+                    .value_name("OFFER_DST")
+                    .takes_value(true)
+                    .index(7)
+                    .help("Specify token account to where the offer amount will be sent to."),
+            )
+            .arg(
+                Arg::new("tradedst")
+                    .value_name("TRADE_DST")
+                    .takes_value(true)
+                    .index(8)
+                    .help("Specify token account to where the trade amount will be sent to."),
+            )
+        )
+        .subcommand(Command::new("bootstrap").about("Create all accounts needed to test the program")
+            .arg(
+                Arg::new("wallet1")
+                    .value_name("WALLET1")
+                    .takes_value(true)
+                    .required(true)
+                    .index(1)
+                    .help("Specify the path to the wallet of the user making the offer."),
+            )
+            .arg(
+                Arg::new("wallet2")
+                    .value_name("WALLET2")
+                    .takes_value(true)
+                    .required(true)
+                    .index(2)
+                    .help("Specify the path to the wallet of the user taking the offer."),
+            )
+        )
+        .get_matches();
+    
+    let (sub_command, sub_matches) = app_matches.subcommand().unwrap();
 
     let cfg = load_config().unwrap();
     let cluster_url = cfg["json_rpc_url"].as_str().unwrap();
@@ -44,40 +186,55 @@ fn main() {
         "Connected to cluster at {}.", cluster_url
     );
 
-    let program_info = conn.get_account(&program_pubkey).unwrap();
-    if !program_info.executable {
-        println!(
-            "program with addr {} is not executable",
-            program_addr,
-        );
-        return;
-    }
-
     let wallet = get_wallet(None).unwrap();
     //let balance = conn.get_account(&wallet.pubkey()).unwrap().lamports;
     //println!("Account balance: {}", balance); // TODO: this prints a different value from 'solana balance' ?
 
     // TODO
-    let offer_src = Pubkey::from_str("8GKnb7qGi3iRq59du5VTTQFSwTEhtrKgVywnZ1LcrGZS").unwrap();
-    let offer_dst = Pubkey::from_str("3vcMr9AUhK9KcV12CtnTjV7SqJr2nne3nVci2hJ2AqYd").unwrap();
-    let trade_src = Pubkey::from_str("9j4dvQFYQE8kAzdM3Ukxfk7obus7vviNVuV7kPWk9bGP").unwrap();
-    let trade_dst = Pubkey::from_str("7p3tqYMydkUNzrqT5NFojCxTGfkMLCFr3nAisuSUYYNw").unwrap();
+    // let offer_src = Pubkey::from_str("ETc8ETuJMdkGfDD8cXFfu1pzdkC2XjzDgRE6Q4ojwxJw").unwrap();
+    // let offer_dst = Pubkey::from_str("3vcMr9AUhK9KcV12CtnTjV7SqJr2nne3nVci2hJ2AqYd").unwrap();
+    // let trade_src = Pubkey::from_str("3jQfRPCEBQT74mzqi7GT7wE2nBNd7WsDmptbMrQBzrTx").unwrap();
+    // let trade_dst = Pubkey::from_str("7p3tqYMydkUNzrqT5NFojCxTGfkMLCFr3nAisuSUYYNw").unwrap();
 
     // TODO: pass in the args
-    let wallet1 = Pubkey::from_str("C1G2n2mFb27S3didy9zRc5KCHvgXNVtBmH4DzFfQEaCb").unwrap();
+    // let wallet1 = Pubkey::from_str("C1G2n2mFb27S3didy9zRc5KCHvgXNVtBmH4DzFfQEaCb").unwrap();
     // generated after step "1"
-    let trade_account_id = Pubkey::from_str("ErsEQXQqGgawbCecvt2jXdmZNn63SvLJ7yrk5QtK9JrV").unwrap();
+    // let trade_account_id = Pubkey::from_str("GdDvAyiqctDsMppRKeEt39Y42xjWig41QPaAJQ1R4uxS").unwrap();
     
     //println!("fees = {:?}", rpc.get_fees()?);
     //println!("signature fee = {}", rpc.get_fees()?.fee_calculator.lamports_per_signature);
 
-    match args[2].as_str() {
-        "1" => {
-            let decimals = resolve_mint_info(&offer_src, None, &conn).unwrap();
-            let ammount = spl_token::ui_amount_to_amount(2.0, decimals);
-            client::create_trade(ammount, wallet, offer_src, program_pubkey, &conn).unwrap();
+    match sub_command {
+        "create" => {
+            // TODO: also pass the trade token to make sure the trade is done with the expected token
+            let program_addr = ProgramConfig::load_program_addr(PROGRAM_CONFIG_PATH.into()).unwrap();
+            let program_pubkey = Pubkey::from_str(&program_addr).unwrap();
+
+            let src = Pubkey::from_str(sub_matches.value_of("offer_account").unwrap().into()).unwrap();
+            println!(":: {}", sub_matches.value_of("amount").unwrap());
+            let amount_arg: f64 = sub_matches.value_of("amount").unwrap().parse().unwrap();
+
+            let decimals = resolve_mint_info(&src, None, &conn).unwrap();
+            let ammount = spl_token::ui_amount_to_amount(amount_arg, decimals);
+            client::create_trade(ammount, wallet, src, program_pubkey, &conn).unwrap();
         }
-        "2" => {
+        "trade" => {
+            let program_addr = ProgramConfig::load_program_addr(PROGRAM_CONFIG_PATH.into()).unwrap();
+            let program_pubkey = Pubkey::from_str(&program_addr).unwrap();
+
+            let trade_account_id = Pubkey::from_str(sub_matches.value_of("id").unwrap().into()).unwrap();
+            let offer_src = Pubkey::from_str(sub_matches.value_of("offersrc").unwrap().into()).unwrap();
+            let trade_src = Pubkey::from_str(sub_matches.value_of("tradesrc").unwrap().into()).unwrap();
+            let wallet1 = Pubkey::from_str(sub_matches.value_of("offer-owner").unwrap().into()).unwrap();
+            let offer_dst = match sub_matches.value_of("offerdst") {
+                Some(addr) => Some(Pubkey::from_str(addr.into()).unwrap()),
+                None => None
+            };
+            let trade_dst = match sub_matches.value_of("tradedst") {
+                Some(addr) => Some(Pubkey::from_str(addr.into()).unwrap()),
+                None => None
+            };
+
             let offer_decimals = resolve_mint_info(&offer_src, None, &conn).unwrap();
             let offer_ammount = spl_token::ui_amount_to_amount(10.0, offer_decimals);
             let trade_decimals = resolve_mint_info(&trade_src, None, &conn).unwrap();
@@ -90,24 +247,34 @@ fn main() {
                 wallet1,
                 trade_account_id,
                 program_pubkey,
-                None, //Some(trade_dst),
+                trade_dst,
                 trade_src,
-                None, //Some(offer_dst),
+                offer_dst,
                 offer_src,
                 &conn,
             ).unwrap();
         }
-        "3" => {
-            if args.len() != 5 {
-                eprintln!(
-                    "usage: {} <trader prog addr> 3 <path to wallet 1> <path to wallet 2>",
-                    args[0]
-                );
-                std::process::exit(-1);
-            }
-            let wallet1 = get_wallet(Some(&args[3])).unwrap();
-            let wallet2 = get_wallet(Some(&args[4])).unwrap();
+        "bootstrap" => {
+            let wallet1 = get_wallet(sub_matches.value_of("wallet1")).unwrap();
+            let wallet2 = get_wallet(sub_matches.value_of("wallet2")).unwrap();
             client::setup_accounts(10, 12, wallet1, wallet2, &conn).unwrap();
+        }
+        "config" => {
+            match sub_matches.value_of("program") {
+                Some(addr) => {
+                    ProgramConfig::store_program_addr(PROGRAM_CONFIG_PATH.into(), addr.into()).unwrap();
+                    ()
+                },
+                None => ()
+            }
+
+            match sub_matches.value_of("wallet") {
+                Some(addr) => {
+                    // ProgramConfig::store_wallet_addr(program_config_path.into(), addr.into()).unwrap();
+                    ()
+                },
+                None => ()
+            }
         }
         op => {
             eprintln!("Unknown operation '{}'", op);

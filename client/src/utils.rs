@@ -18,7 +18,64 @@ use spl_token::state::{
     Mint,
 };
 use std::str::FromStr;
-use yaml_rust::YamlLoader;
+use yaml_rust::{
+    YamlLoader,
+};
+use serde::{
+    Deserialize,
+    Serialize,
+};
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ProgramConfig {
+    pub program_addr: Option<String>,
+    // pub wallet_addr: Option<String>,
+}
+
+impl ProgramConfig {
+    // pub fn store_wallet_addr(path: String, addr: String) -> Result<()> {
+    //     let json_config = match std::fs::read_to_string(&path){
+    //         Ok(data) => data,
+    //         Err(_) => "{}".into(),
+    //     };
+    //     let mut prog_config: ProgramConfig = serde_json::from_str(&json_config).unwrap();
+
+    //     prog_config.wallet_addr = Some(addr);
+
+    //     let json = serde_json::to_string(&prog_config).unwrap();
+    //     std::fs::write(&path, json).unwrap();
+
+    //     Ok(())
+    // }
+
+    pub fn store_program_addr(path: String, addr: String) -> Result<()> {
+        let json_config = match std::fs::read_to_string(&path){
+            Ok(data) => data,
+            Err(_) => "{}".into(),
+        };
+        let mut prog_config: ProgramConfig = serde_json::from_str(&json_config).unwrap();
+
+        prog_config.program_addr = Some(addr);
+
+        let json = serde_json::to_string(&prog_config).unwrap();
+        std::fs::write(&path, json).unwrap();
+
+        Ok(())
+    }
+
+    pub fn load_program_addr(path: String) -> Result<String> {
+        let json_config = match std::fs::read_to_string(&path){
+            Ok(data) => data,
+            Err(_) => "{}".into(),
+        };
+        let prog_config: ProgramConfig = serde_json::from_str(&json_config).unwrap();
+
+        match prog_config.program_addr {
+            Some(addr) => Ok(addr),
+            None => Err(Error::InvalidConfig("Program address not configured".into()))
+        }
+    }
+}
 
 pub fn load_config() -> Result<yaml_rust::Yaml> {
     let path = match home::home_dir() {
@@ -44,7 +101,7 @@ pub fn load_config() -> Result<yaml_rust::Yaml> {
     }
 }
 
-pub fn get_wallet(maybe_path: Option<&String>) -> Result<Keypair> {
+pub fn get_wallet(maybe_path: Option<&str>) -> Result<Keypair> {
     let config = load_config()?;
 
     let path = match maybe_path {
