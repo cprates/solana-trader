@@ -1,22 +1,14 @@
 use borsh::BorshSerialize;
-use solana_program::program_pack::Pack;
-use solana_program::system_program;
 use crate::{Error, Result};
 use crate::utils::{
-    get_wallet,
-    load_config,
     create_mint_ix,
     create_account_ix,
     get_or_create_token_account,
+    resolve_mint_info,
 };
-use solana_client::{
-    rpc_client::RpcClient,
-    client_error::ClientErrorKind,
-};
+use solana_client::rpc_client::RpcClient;
 use spl_associated_token_account;
 use solana_sdk::{
-    account::Account,
-    commitment_config::CommitmentConfig,
     message::Message,
     instruction::{
         AccountMeta, 
@@ -30,7 +22,6 @@ use solana_sdk::{
     },
     transaction::Transaction,
 };
-use std::borrow::Borrow;
 //use std::fmt::Result;
 use std::str::FromStr;
 use trader::{
@@ -42,8 +33,8 @@ use trader::{
  * Sets up all base accounts to test all oprations. Expects two wallets, wallet1 will hold Mint account A, wallet2
  * will hold Mintaccount B.
  * 
- * - Mint A
- * - Mint B
+ * - Mint A (offer)
+ * - Mint B (trade)
  * 
  * A (offer)
  *   - Token Account 1: Mint A. Offer src account which will be transfered to the trader program, with balance of 1000
@@ -190,9 +181,7 @@ pub fn create_trade(
     println!("Creating trade");
 
     let trade_account_keypair = &Keypair::new(); // TODO: is this ok?
-    println!("New trade account: {}", trade_account_keypair.pubkey().to_string());
-
-
+    
     let program_info = conn.get_account(&trader_program_id).unwrap();
     if !program_info.executable {
         println!(
@@ -232,7 +221,7 @@ pub fn create_trade(
             AccountMeta::new(trade_account_keypair.pubkey(), false),
             AccountMeta::new(token_account, false),
             AccountMeta::new_readonly(trade_mint, false),
-            AccountMeta::new_readonly(pda_pubkey, false),          
+            AccountMeta::new_readonly(pda_pubkey, false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
     );
@@ -240,6 +229,8 @@ pub fn create_trade(
     let transaction = Transaction::new(&[&owner, &trade_account_keypair], message, conn.get_latest_blockhash().unwrap());
 
     conn.send_and_confirm_transaction(&transaction).unwrap();
+
+    println!("New trade id: {}", trade_account_keypair.pubkey().to_string());
 
     Ok(())
 }
@@ -258,6 +249,7 @@ pub fn make_trade(
     trade_src: Pubkey, 
     offer_dst: Option<Pubkey>,
     offer_src: Pubkey,
+    program_authority: Pubkey, 
     conn: &RpcClient,
 ) -> Result<()> {
     println!("Making trade...");
@@ -273,6 +265,24 @@ pub fn make_trade(
     };
     let buf = &action.try_to_vec().unwrap()[..];
 
+    let trade_mint_addr = resolve_mint_info(&trade_src, conn).unwrap();
+    let fee_ata_ix = spl_associated_token_account::create_associated_token_account(
+        &owner.pubkey(),
+        &program_authority,
+        &trade_mint_addr,
+    );
+    let message = Message::new(&[fee_ata_ix], Some(&owner.pubkey()));
+    let transaction = Transaction::new(&[&owner], message, conn.get_latest_blockhash().unwrap());
+    // TODO: filter AlreadyInUse errors
+    match conn.send_and_confirm_transaction(&transaction) {
+        Ok(_) => println!("Account created to store a trade fee."),
+        Err(err) => println!("Ignoring error: {}", err)
+    }
+
+    
+    let fee_ata_addr = spl_associated_token_account::get_associated_token_address(&program_authority, &trade_mint_addr);
+    println!("Fee account address: {}", fee_ata_addr.to_string());
+
     let make_trade_ix = Instruction::new_with_bytes(
         trader_program_id,
         buf,
@@ -284,14 +294,17 @@ pub fn make_trade(
             AccountMeta::new(trade_dst.unwrap_or_else(|| get_or_create_token_account(&owner, owner.pubkey(), trade_src, conn).unwrap()), false),
             AccountMeta::new(trade_src, false),
             AccountMeta::new(offer_dst.unwrap_or_else(|| get_or_create_token_account(&owner, wallet1, offer_src, conn).unwrap()), false),
-            AccountMeta::new_readonly(spl_token::id(), false),
             AccountMeta::new(wallet1, false),
+            AccountMeta::new(fee_ata_addr, false),
+            AccountMeta::new_readonly(spl_token::id(), false),
         ],
     );
     let message = Message::new(&[make_trade_ix], Some(&owner.pubkey()));
     let transaction = Transaction::new(&[&owner], message, conn.get_latest_blockhash().unwrap());
 
     conn.send_and_confirm_transaction(&transaction).unwrap();
+
+    println!("Trade done...");
 
     Ok(())
 }

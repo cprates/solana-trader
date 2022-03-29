@@ -6,7 +6,7 @@ use trader_client::client;
 use trader_client::utils::{
     get_wallet,
     load_config,
-    resolve_mint_info,
+    resolve_mint_decimals,
     ProgramConfig,
 };
 
@@ -15,15 +15,18 @@ use solana_sdk::{
     commitment_config::CommitmentConfig,
     pubkey::Pubkey,
 };
-use solana_clap_utils::{
-    input_validators::{
-        is_valid_pubkey,
-        is_amount,
-    },
-};
+// use solana_clap_utils::{
+//     input_validators::{
+//         is_valid_pubkey,
+//         is_amount,
+//     },
+// };
 use std::str::FromStr;
 
 /*
+solana-keygen new --outfile wallet0.json
+solana config set --keypair $(pwd)/wallet0.json
+solana airdrop 50000
 solana-keygen new --outfile wallet1.json
 solana config set --keypair $(pwd)/wallet1.json
 solana airdrop 50000
@@ -52,7 +55,7 @@ fn main() {
                     .value_name("WALLET")
                     .takes_value(true)
                     .short('w')
-                    .help("Specify wallet address."),
+                    .help("Specify wallet address that owns the program."),
             )
             .arg_required_else_help(true)
         )
@@ -195,12 +198,12 @@ fn main() {
         "create" => {
             let program_addr = ProgramConfig::load_program_addr(PROGRAM_CONFIG_PATH.into()).unwrap();
             let program_pubkey = Pubkey::from_str(&program_addr).unwrap();
-
+            
             let src = Pubkey::from_str(sub_matches.value_of("offer_account").unwrap().into()).unwrap();
             let trade_mint = Pubkey::from_str(sub_matches.value_of("trade_token").unwrap().into()).unwrap();
             let amount_arg: f64 = sub_matches.value_of("amount").unwrap().parse().unwrap();
 
-            let decimals = resolve_mint_info(&src, None, &conn).unwrap();
+            let decimals = resolve_mint_decimals(&src, None, &conn).unwrap();
             let ammount = spl_token::ui_amount_to_amount(amount_arg, decimals);
             client::create_trade(ammount, wallet, src, trade_mint, program_pubkey, &conn).unwrap();
         }
@@ -221,12 +224,15 @@ fn main() {
                 None => None
             };
 
-            let offer_decimals = resolve_mint_info(&offer_src, None, &conn).unwrap();
+            let offer_decimals = resolve_mint_decimals(&offer_src, None, &conn).unwrap();
             let amount: f64 = sub_matches.value_of("offer-amount").unwrap().parse().unwrap();
             let offer_ammount = spl_token::ui_amount_to_amount(amount, offer_decimals);
-            let trade_decimals = resolve_mint_info(&trade_src, None, &conn).unwrap();
+            let trade_decimals = resolve_mint_decimals(&trade_src, None, &conn).unwrap();
             let amount: f64 = sub_matches.value_of("trade-amount").unwrap().parse().unwrap();
             let trade_ammount = spl_token::ui_amount_to_amount(amount, trade_decimals);
+
+            let pa = ProgramConfig::load_wallet_addr(PROGRAM_CONFIG_PATH.into()).unwrap();
+            let program_authority = Pubkey::from_str(pa.as_ref()).unwrap();
 
             client::make_trade(
                 offer_ammount,
@@ -239,13 +245,14 @@ fn main() {
                 trade_src,
                 offer_dst,
                 offer_src,
+                program_authority, 
                 &conn,
             ).unwrap();
         }
         "bootstrap" => {
             let wallet1 = get_wallet(sub_matches.value_of("wallet1")).unwrap();
             let wallet2 = get_wallet(sub_matches.value_of("wallet2")).unwrap();
-            client::setup_accounts(10, 12, wallet1, wallet2, &conn).unwrap();
+            client::setup_accounts(10, 20, wallet1, wallet2, &conn).unwrap();
         }
         "config" => {
             match sub_matches.value_of("program") {
@@ -258,7 +265,7 @@ fn main() {
 
             match sub_matches.value_of("wallet") {
                 Some(addr) => {
-                    // ProgramConfig::store_wallet_addr(program_config_path.into(), addr.into()).unwrap();
+                    ProgramConfig::store_wallet_addr(PROGRAM_CONFIG_PATH.into(), addr.into()).unwrap();
                     ()
                 },
                 None => ()

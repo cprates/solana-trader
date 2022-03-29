@@ -11,10 +11,16 @@ use solana_program::{
     program_error::ProgramError,
     program_memory::sol_memcmp,
     rent::Rent,
-    system_instruction,
-    program_pack::{IsInitialized, Pack, Sealed},
+    program_pack::Pack,
 };
 use spl_token::state::Account;
+use std::ops::{Mul, Sub};
+use std::str::FromStr;
+
+// Public address of the wallet that has the authority on the program
+const PROGRAM_AUTHORITY: &str = "8VtktqchqCSowPhdiZfuMez8HqrRf2LRPcdwjvGNiumX";
+const FEE_PERCENTAGE: f64 = 0.01; // 1%
+
 
 pub struct Processor {}
 
@@ -71,8 +77,6 @@ impl Processor {
                 trade_account.program_id = *program_id;
                 trade_account.serialize(&mut *trade_ai.data.borrow_mut())?;
 
-                // Create temp account
-
                 msg!("Trade account initialised...");
 
                 // transfer authority of the token account to trader program - this will avoid
@@ -80,8 +84,6 @@ impl Processor {
 
                 let pda_pubkey = next_account_info(accounts_iter)?;
                 let token_prog_ai = next_account_info(accounts_iter)?;
-
-                msg!("Transfering token account authority to {}", pda_pubkey.key.to_string());
 
                 let owner_change_ix = spl_token::instruction::set_authority(
                     &spl_token::id(),
@@ -97,7 +99,7 @@ impl Processor {
                     &[
                         offer_token_ai.clone(),
                         authority.clone(),
-                        token_prog_ai.clone(), // TODO: probably not needed
+                        token_prog_ai.clone(),
                     ],
                 )?;
 
@@ -131,8 +133,9 @@ impl Processor {
                     return Err(TradeError::TradeMintMissmatch)?;
                 }
                 let offer_dst_ai = next_account_info(accounts_iter)?;
-                let token_program_ai = next_account_info(accounts_iter)?;
                 let offer_owner_ai = next_account_info(accounts_iter)?;
+                let fee_account_ai = next_account_info(accounts_iter)?;
+                let token_program_ai = next_account_info(accounts_iter)?;
 
                 if sol_memcmp(trade_account.offer_token_account.as_ref(), original_pda_addr_ai.key.as_ref(), PUBKEY_BYTES) != 0 {
                     Err(TradeError::WrongTokenAccount)?
@@ -142,6 +145,7 @@ impl Processor {
                     Err(ProgramError::IncorrectProgramId)?
                 }
 
+                // I'll leave the checks agains the account balance to the spl-token program
                 if expected_offer != trade_account.offer_amount {
                     msg!("Expected offer of {}, but got {}", expected_offer, trade_account.offer_amount);
                     return Err(TradeError::UnexpectedOfferAmount)?;
@@ -151,6 +155,41 @@ impl Processor {
                     msg!("Expected trade of {}, but got {}", expected_trade, trade_account.trade_amount);
                     return Err(TradeError::UnexpectedTradeAmount)?;
                 }
+
+                // transfer fee
+
+                let prog_authority = Pubkey::from_str(PROGRAM_AUTHORITY).unwrap();
+                let fee_ata = spl_associated_token_account::get_associated_token_address(&prog_authority, &trade_src.mint);
+                // make sure the fee account passed is the correct one
+                if sol_memcmp(fee_account_ai.key.as_ref(), fee_ata.as_ref(), PUBKEY_BYTES) != 0 {
+                    Err(TradeError::WrongAuthority)?
+                }
+                
+                // Not sure on how to do the rouding
+                // using floor or ceil instead of rount result in missing symbols in the ELF file...
+                let lamports_fee = (trade_account.offer_amount as f64).mul(FEE_PERCENTAGE).round() as u64;
+                msg!("Applying a transfer fee of {} lamports", lamports_fee);
+
+                let fee_transfer_ix = spl_token::instruction::transfer(
+                    &spl_token::id(),
+                    trade_src_ai.key,
+                    &fee_account_ai.key,
+                    &authority_ai.key,
+                    &[&authority_ai.key],
+                    lamports_fee,
+                )?;
+                
+                invoke(
+                    &fee_transfer_ix,
+                    &[
+                        trade_src_ai.clone(),
+                        fee_account_ai.clone(),
+                        authority_ai.clone(),
+                        token_program_ai.clone(),
+                    ],
+                )?;
+
+                msg!("Fee transfered to {}...", fee_account_ai.key.to_string());
 
                 // transfer offer from pda to destination 
 
@@ -187,7 +226,7 @@ impl Processor {
                     trade_dst_ai.key,
                     &authority_ai.key,
                     &[&authority_ai.key],
-                    expected_trade,
+                    expected_trade.sub(lamports_fee),
                 )?;
                 
                 invoke(

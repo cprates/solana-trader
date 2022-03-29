@@ -29,24 +29,24 @@ use serde::{
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ProgramConfig {
     pub program_addr: Option<String>,
-    // pub wallet_addr: Option<String>,
+    pub wallet_addr: Option<String>,
 }
 
 impl ProgramConfig {
-    // pub fn store_wallet_addr(path: String, addr: String) -> Result<()> {
-    //     let json_config = match std::fs::read_to_string(&path){
-    //         Ok(data) => data,
-    //         Err(_) => "{}".into(),
-    //     };
-    //     let mut prog_config: ProgramConfig = serde_json::from_str(&json_config).unwrap();
+    pub fn store_wallet_addr(path: String, addr: String) -> Result<()> {
+        let json_config = match std::fs::read_to_string(&path){
+            Ok(data) => data,
+            Err(_) => "{}".into(),
+        };
+        let mut prog_config: ProgramConfig = serde_json::from_str(&json_config).unwrap();
 
-    //     prog_config.wallet_addr = Some(addr);
+        prog_config.wallet_addr = Some(addr);
 
-    //     let json = serde_json::to_string(&prog_config).unwrap();
-    //     std::fs::write(&path, json).unwrap();
+        let json = serde_json::to_string(&prog_config).unwrap();
+        std::fs::write(&path, json).unwrap();
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
     pub fn store_program_addr(path: String, addr: String) -> Result<()> {
         let json_config = match std::fs::read_to_string(&path){
@@ -73,6 +73,19 @@ impl ProgramConfig {
         match prog_config.program_addr {
             Some(addr) => Ok(addr),
             None => Err(Error::InvalidConfig("Program address not configured".into()))
+        }
+    }
+
+    pub fn load_wallet_addr(path: String) -> Result<String> {
+        let json_config = match std::fs::read_to_string(&path){
+            Ok(data) => data,
+            Err(_) => "{}".into(),
+        };
+        let prog_config: ProgramConfig = serde_json::from_str(&json_config).unwrap();
+
+        match prog_config.wallet_addr {
+            Some(addr) => Ok(addr),
+            None => Err(Error::InvalidConfig("Wallet address not configured".into()))
         }
     }
 }
@@ -170,7 +183,7 @@ pub fn create_account_ix(
 
 // Copied  from https://github.com/solana-labs/solana-program-library/blob/b7a3fc62431fcd00001df625aaa61a29ce7d1e29/token/cli/src/main.rs#L599
 // and adapted
-pub fn resolve_mint_info(
+pub fn resolve_mint_decimals(
     token_account: &Pubkey,
     mint_address: Option<Pubkey>,
     conn: &RpcClient,
@@ -189,6 +202,17 @@ pub fn resolve_mint_info(
         }
     }
     Ok(source_account.token_amount.decimals)
+}
+
+pub fn resolve_mint_info(
+    token_account: &Pubkey,
+    conn: &RpcClient,
+) -> Result<Pubkey> {
+    let source_account = conn
+        .get_token_account(token_account).unwrap()
+        .ok_or_else(|| format!("Could not find token account {}", token_account)).unwrap();
+
+    Ok(Pubkey::from_str(&source_account.mint).unwrap())
 }
 
 pub fn get_or_create_token_account(
