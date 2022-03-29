@@ -28,6 +28,7 @@ pub struct AccountTrade {
     pub offer_amount: u64,
     pub trade_amount: u64,
     pub initialized: bool,
+    pub trade_mint: Pubkey,
     pub program_id: Pubkey,
 }
 

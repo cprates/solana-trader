@@ -166,8 +166,8 @@ pub fn setup_accounts(
 
     // report
     println!("");
-    println!("Mint account A: {}", mint_a_keypair.pubkey().to_string());
-    println!("Mint account B: {}", mint_b_keypair.pubkey().to_string());
+    println!("Mint account for offer: {}", mint_a_keypair.pubkey().to_string());
+    println!("Mint account for trade: {}", mint_b_keypair.pubkey().to_string());
     println!("Offer");
     println!("\t- src: {} with balance {}", account_1_keypair.pubkey().to_string(), offer);
     println!("\t- dst: {}", account_3_keypair.pubkey().to_string());
@@ -183,6 +183,7 @@ pub fn create_trade(
     trade: u64, 
     owner: Keypair,
     token_account: Pubkey,
+    trade_mint: Pubkey,
     trader_program_id: Pubkey, 
     conn: &RpcClient,
 ) -> Result<()> {
@@ -230,7 +231,8 @@ pub fn create_trade(
             AccountMeta::new_readonly(owner.pubkey(), true),
             AccountMeta::new(trade_account_keypair.pubkey(), false),
             AccountMeta::new(token_account, false),
-            AccountMeta::new(pda_pubkey, false),          
+            AccountMeta::new_readonly(trade_mint, false),
+            AccountMeta::new_readonly(pda_pubkey, false),          
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
     );

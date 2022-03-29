@@ -59,12 +59,15 @@ impl Processor {
                     return Err(ProgramError::InsufficientFunds)?;
                 }
 
+                let trade_mint_ai = next_account_info(accounts_iter)?;
+
                 trade_account.bump_seed = bump_seed;
                 trade_account.offer_token_account = *offer_token_ai.key;
                 trade_account.authority = *authority.key;
                 trade_account.offer_amount = offer_token.amount;
                 trade_account.trade_amount = trade;
                 trade_account.initialized = true;
+                trade_account.trade_mint = *trade_mint_ai.key;
                 trade_account.program_id = *program_id;
                 trade_account.serialize(&mut *trade_ai.data.borrow_mut())?;
 
@@ -123,6 +126,10 @@ impl Processor {
                 let original_pda_addr_ai = next_account_info(accounts_iter)?;
                 let trade_dst_ai = next_account_info(accounts_iter)?;
                 let trade_src_ai = next_account_info(accounts_iter)?;
+                let trade_src = Account::unpack_from_slice(&trade_src_ai.data.borrow())?;
+                if sol_memcmp(trade_src.mint.as_ref(), trade_account.trade_mint.as_ref(), PUBKEY_BYTES) != 0 {
+                    return Err(TradeError::TradeMintMissmatch)?;
+                }
                 let offer_dst_ai = next_account_info(accounts_iter)?;
                 let token_program_ai = next_account_info(accounts_iter)?;
                 let offer_owner_ai = next_account_info(accounts_iter)?;

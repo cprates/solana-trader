@@ -24,6 +24,9 @@ pub enum TradeError {
 
     #[error("Wrong token account")]
     WrongTokenAccount,
+
+    #[error("Trade mint missmatch")]
+    TradeMintMissmatch,
 }
 
 impl From<TradeError> for ProgramError {

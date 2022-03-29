@@ -44,7 +44,6 @@ fn main() {
                 Arg::new("program")
                     .value_name("PROGRAM")
                     .takes_value(true)
-                    //.validator(is_valid_pubkey)
                     .short('p')
                     .help("Specify program address."),
             )
@@ -52,7 +51,6 @@ fn main() {
                 Arg::new("wallet")
                     .value_name("WALLET")
                     .takes_value(true)
-                    //.required(true)
                     .short('w')
                     .help("Specify wallet address."),
             )
@@ -189,34 +187,22 @@ fn main() {
     let wallet = get_wallet(None).unwrap();
     //let balance = conn.get_account(&wallet.pubkey()).unwrap().lamports;
     //println!("Account balance: {}", balance); // TODO: this prints a different value from 'solana balance' ?
-
-    // TODO
-    // let offer_src = Pubkey::from_str("ETc8ETuJMdkGfDD8cXFfu1pzdkC2XjzDgRE6Q4ojwxJw").unwrap();
-    // let offer_dst = Pubkey::from_str("3vcMr9AUhK9KcV12CtnTjV7SqJr2nne3nVci2hJ2AqYd").unwrap();
-    // let trade_src = Pubkey::from_str("3jQfRPCEBQT74mzqi7GT7wE2nBNd7WsDmptbMrQBzrTx").unwrap();
-    // let trade_dst = Pubkey::from_str("7p3tqYMydkUNzrqT5NFojCxTGfkMLCFr3nAisuSUYYNw").unwrap();
-
-    // TODO: pass in the args
-    // let wallet1 = Pubkey::from_str("C1G2n2mFb27S3didy9zRc5KCHvgXNVtBmH4DzFfQEaCb").unwrap();
-    // generated after step "1"
-    // let trade_account_id = Pubkey::from_str("GdDvAyiqctDsMppRKeEt39Y42xjWig41QPaAJQ1R4uxS").unwrap();
     
     //println!("fees = {:?}", rpc.get_fees()?);
     //println!("signature fee = {}", rpc.get_fees()?.fee_calculator.lamports_per_signature);
 
     match sub_command {
         "create" => {
-            // TODO: also pass the trade token to make sure the trade is done with the expected token
             let program_addr = ProgramConfig::load_program_addr(PROGRAM_CONFIG_PATH.into()).unwrap();
             let program_pubkey = Pubkey::from_str(&program_addr).unwrap();
 
             let src = Pubkey::from_str(sub_matches.value_of("offer_account").unwrap().into()).unwrap();
-            println!(":: {}", sub_matches.value_of("amount").unwrap());
+            let trade_mint = Pubkey::from_str(sub_matches.value_of("trade_token").unwrap().into()).unwrap();
             let amount_arg: f64 = sub_matches.value_of("amount").unwrap().parse().unwrap();
 
             let decimals = resolve_mint_info(&src, None, &conn).unwrap();
             let ammount = spl_token::ui_amount_to_amount(amount_arg, decimals);
-            client::create_trade(ammount, wallet, src, program_pubkey, &conn).unwrap();
+            client::create_trade(ammount, wallet, src, trade_mint, program_pubkey, &conn).unwrap();
         }
         "trade" => {
             let program_addr = ProgramConfig::load_program_addr(PROGRAM_CONFIG_PATH.into()).unwrap();
@@ -236,9 +222,11 @@ fn main() {
             };
 
             let offer_decimals = resolve_mint_info(&offer_src, None, &conn).unwrap();
-            let offer_ammount = spl_token::ui_amount_to_amount(10.0, offer_decimals);
+            let amount: f64 = sub_matches.value_of("offer-amount").unwrap().parse().unwrap();
+            let offer_ammount = spl_token::ui_amount_to_amount(amount, offer_decimals);
             let trade_decimals = resolve_mint_info(&trade_src, None, &conn).unwrap();
-            let trade_ammount = spl_token::ui_amount_to_amount(2.0, trade_decimals);
+            let amount: f64 = sub_matches.value_of("trade-amount").unwrap().parse().unwrap();
+            let trade_ammount = spl_token::ui_amount_to_amount(amount, trade_decimals);
 
             client::make_trade(
                 offer_ammount,
