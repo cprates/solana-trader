@@ -79,12 +79,20 @@ fn main() {
             )
             .arg(
                 Arg::new("amount")
-                    .value_name("AMOUNT")
+                    .value_name("TRADE_AMOUNT")
                     .takes_value(true)
                     .required(true)
                     //.validator(is_amount)
                     .index(3)
                     .help("Specify the amount of the trade."),
+            )
+            .arg(
+                Arg::new("trade-dst")
+                    .value_name("TRADE_DST")
+                    .takes_value(true)
+                    //.validator(is_amount)
+                    .index(4)
+                    .help("Specify the account we want to receive the trade amount."),
             )
         )
         .subcommand(Command::new("trade").about("Accept a trade")
@@ -202,10 +210,14 @@ fn main() {
             let src = Pubkey::from_str(sub_matches.value_of("offer_account").unwrap().into()).unwrap();
             let trade_mint = Pubkey::from_str(sub_matches.value_of("trade_token").unwrap().into()).unwrap();
             let amount_arg: f64 = sub_matches.value_of("amount").unwrap().parse().unwrap();
+            let trade_dst = match sub_matches.value_of("trade-dst") {
+                Some(addr) => Some(Pubkey::from_str(addr.into()).unwrap()),
+                None => None
+            };
 
             let decimals = resolve_mint_decimals(&src, None, &conn).unwrap();
             let ammount = spl_token::ui_amount_to_amount(amount_arg, decimals);
-            client::create_trade(ammount, wallet, src, trade_mint, program_pubkey, &conn).unwrap();
+            client::create_trade(ammount, wallet, src, trade_mint, trade_dst, program_pubkey, &conn).unwrap();
         }
         "trade" => {
             let program_addr = ProgramConfig::load_program_addr(PROGRAM_CONFIG_PATH.into()).unwrap();

@@ -66,9 +66,11 @@ impl Processor {
                 }
 
                 let trade_mint_ai = next_account_info(accounts_iter)?;
+                let trade_dst_ai = next_account_info(accounts_iter)?;
 
                 trade_account.bump_seed = bump_seed;
                 trade_account.offer_token_account = *offer_token_ai.key;
+                trade_account.trade_dst_account = *trade_dst_ai.key;
                 trade_account.authority = *authority.key;
                 trade_account.offer_amount = offer_token.amount;
                 trade_account.trade_amount = trade;
@@ -127,6 +129,9 @@ impl Processor {
                 // point its authority is moved to the program which changes its data
                 let original_pda_addr_ai = next_account_info(accounts_iter)?;
                 let trade_dst_ai = next_account_info(accounts_iter)?;
+                if sol_memcmp(trade_dst_ai.key.as_ref(), trade_account.trade_dst_account.as_ref(), PUBKEY_BYTES) != 0 {
+                    return Err(TradeError::UnexpectedAccount)?;
+                }
                 let trade_src_ai = next_account_info(accounts_iter)?;
                 let trade_src = Account::unpack_from_slice(&trade_src_ai.data.borrow())?;
                 if sol_memcmp(trade_src.mint.as_ref(), trade_account.trade_mint.as_ref(), PUBKEY_BYTES) != 0 {

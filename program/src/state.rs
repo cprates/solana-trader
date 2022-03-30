@@ -24,6 +24,7 @@ impl AccountTemp {
 pub struct AccountTrade {
     pub bump_seed: u8,
     pub offer_token_account: Pubkey,
+    pub trade_dst_account: Pubkey,
     pub authority: Pubkey,
     pub offer_amount: u64,
     pub trade_amount: u64,

@@ -175,6 +175,7 @@ pub fn create_trade(
     owner: Keypair,
     token_account: Pubkey,
     trade_mint: Pubkey,
+    trade_dst: Option<Pubkey>,
     trader_program_id: Pubkey, 
     conn: &RpcClient,
 ) -> Result<()> {
@@ -207,6 +208,14 @@ pub fn create_trade(
             &trader_program_id,
     );
 
+    // if no destination is specified, we expect an ATA to be used
+    let trade_dst_pubkey = match trade_dst {
+        Some(addr) => addr,
+        None => {
+            spl_associated_token_account::get_associated_token_address(&owner.pubkey(), &trade_mint)
+        }
+    };
+
     let action = Action::CreateTrade {
         bump_seed: bump_seed,
         trade: trade,
@@ -221,6 +230,7 @@ pub fn create_trade(
             AccountMeta::new(trade_account_keypair.pubkey(), false),
             AccountMeta::new(token_account, false),
             AccountMeta::new_readonly(trade_mint, false),
+            AccountMeta::new_readonly(trade_dst_pubkey, false),
             AccountMeta::new_readonly(pda_pubkey, false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
@@ -291,9 +301,9 @@ pub fn make_trade(
             AccountMeta::new(trade_id, false),
             AccountMeta::new_readonly(pda_pubkey, false),
             AccountMeta::new(offer_src, false),
-            AccountMeta::new(trade_dst.unwrap_or_else(|| get_or_create_token_account(&owner, owner.pubkey(), trade_src, conn).unwrap()), false),
+            AccountMeta::new(trade_dst.unwrap_or_else(|| get_or_create_token_account(&owner, wallet1, trade_src, conn).unwrap()), false),
             AccountMeta::new(trade_src, false),
-            AccountMeta::new(offer_dst.unwrap_or_else(|| get_or_create_token_account(&owner, wallet1, offer_src, conn).unwrap()), false),
+            AccountMeta::new(offer_dst.unwrap_or_else(|| get_or_create_token_account(&owner, owner.pubkey(), offer_src, conn).unwrap()), false),
             AccountMeta::new(wallet1, false),
             AccountMeta::new(fee_ata_addr, false),
             AccountMeta::new_readonly(spl_token::id(), false),
