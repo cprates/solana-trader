@@ -50,6 +50,8 @@ impl Processor {
                 }
 
                 let rent = Rent::get()?;
+                // apparently the runtime won't allow creation of new accounts that are not rent exempt and will reject
+                // transactions that reduce the account balance to below the minimum. So, this seems pointless
                 if !rent.is_exempt(trade_ai.lamports(), trade_ai.data_len()) {
                     return Err(ProgramError::AccountNotRentExempt)?;
                 }

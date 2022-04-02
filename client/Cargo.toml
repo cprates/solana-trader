@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-solana-sdk = "1.9.9"
-solana-client = "1.9.9"
-solana-program = "1.4.4"
+solana-sdk = "1.10.5"
+solana-client = "1.10.5"
+solana-program = "1.10.5"
 spl-token = {version = "3.2.0", features = ["no-entrypoint"]}
 spl-associated-token-account = { version = "1.0.3", features = [ "no-entrypoint" ] }
 yaml-rust = "0.4"
@@ -16,7 +16,17 @@ borsh = "0.9.1"
 serde = "1.0"
 serde_json = "1.0"
 clap = { version = "3.1.6", features = ["derive"] }
-solana-clap-utils = "=1.9.9"
+solana-clap-utils = "1.10.5"
+
+[dev-dependencies]
+solana-validator = "1.10.5"
+solana-test-validator = "1.10.5"
+solana-streamer = "1.10.5"
+solana-logger = "1.10.5"
+solana-program-test = "1.10.5"
+futures = "0.3"
+tokio = { version = "1.10.5", features = ["full"] }
+assert_matches = "1.4.0"
 
 [dependencies.trader]
 path = "../program"
