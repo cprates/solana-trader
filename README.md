@@ -24,10 +24,19 @@ solana config set --keypair $(pwd)/wallet2.json
 solana airdrop 50000
 ```
 
+Update the program code in `processor.rs/PROGRAM_AUTHORITY` with the address of wallet0.
+
+
 Build and upload the program
 ```bash
 solana config set --keypair $(pwd)/wallet0.json
 cargo build-bpf --bpf-out-dir=./ && solana program deploy $(pwd)/trader.so
+```
+
+
+Configure program with its wallet address and its own program id
+```bash
+cargo run -- config -w <WALLET> -p <PROGRAM>
 ```
 
 
