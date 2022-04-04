@@ -294,7 +294,7 @@ impl TestData {
         let trade_balance: u64 = spl_token::ui_amount_to_amount(5.0, 9);
 
         // User B
-        let wallet2 = get_wallet(None).unwrap();
+        let wallet2 = get_wallet("../wallet0.json".into()).unwrap();
 
         let offer_mint = mint_account(&payer, &payer, recent_blockhash, &conn).await;
         let trade_mint = mint_account(&wallet2, &payer, recent_blockhash, &conn).await;
