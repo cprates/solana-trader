@@ -18,7 +18,7 @@ use std::ops::{Mul, Sub};
 use std::str::FromStr;
 
 // Public address of the wallet that has the authority on the program
-const PROGRAM_AUTHORITY: &str = "8VtktqchqCSowPhdiZfuMez8HqrRf2LRPcdwjvGNiumX";
+const PROGRAM_AUTHORITY: &str = "Ej3Dy8i7PWZb52Chg1GEaCG17StWH5gQSHmti4hE4HvC";
 const FEE_PERCENTAGE: f64 = 0.01; // 1%
 
 
@@ -136,6 +136,7 @@ impl Processor {
                 }
                 let trade_src_ai = next_account_info(accounts_iter)?;
                 let trade_src = Account::unpack_from_slice(&trade_src_ai.data.borrow())?;
+                // I exepect this to fail anyway if the offer dst is from a different mint. Is it worth to check here?
                 if sol_memcmp(trade_src.mint.as_ref(), trade_account.trade_mint.as_ref(), PUBKEY_BYTES) != 0 {
                     return Err(TradeError::TradeMintMissmatch)?;
                 }
@@ -198,7 +199,7 @@ impl Processor {
 
                 msg!("Fee transfered to {}...", fee_account_ai.key.to_string());
 
-                // transfer offer from pda to destination 
+                // transfer offer from pda to destination
 
                 let transfer_offer_ix = spl_token::instruction::transfer(
                     &spl_token::id(),
@@ -252,7 +253,8 @@ impl Processor {
                 );
 
                 let trade_account_balance = trade_account_ai.lamports();
-                // TODO: Store this in the trade account and make sure they match, to prevent the taker from using a different account to return lamports
+                // TODO: Store this in the trade account and make sure they match, to prevent the taker from using a
+                //  different account to return lamports
                 **offer_owner_ai.try_borrow_mut_lamports()? = offer_owner_ai
                     .lamports()
                     .checked_add(trade_account_ai.lamports())

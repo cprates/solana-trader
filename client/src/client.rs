@@ -289,7 +289,6 @@ pub fn make_trade(
         Err(err) => println!("Ignoring error: {}", err)
     }
 
-    
     let fee_ata_addr = spl_associated_token_account::get_associated_token_address(&program_authority, &trade_mint_addr);
     println!("Fee account address: {}", fee_ata_addr.to_string());
 
